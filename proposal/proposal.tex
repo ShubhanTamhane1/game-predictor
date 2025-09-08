@@ -1,0 +1,48 @@
+# Research Proposal: Game Predictor
+
+## Introduction
+Predicting sports game outcomes has long attracted interest in statistics, data science, and economics because of its practical applications in betting, team management, and fan engagement. Prior work has explored statistical ratings and models such as margin-of-victory estimators and Elo-like systems to assess team strength (Glickman & Stern, 2016):contentReference[oaicite:0]{index=0}. Recent studies have incorporated machine learning approaches, testing models like logistic regression, random forests, and support vector machines on NFL data (Juuri, 2023):contentReference[oaicite:1]{index=1}. Hybrid systems that combine multiple algorithms have also been proposed for improved accuracy (Uzoma & Nwachukwu, 2015):contentReference[oaicite:2]{index=2}. At a broader scale, systematic reviews highlight how machine learning has transformed sports betting, improving prediction and odds modeling while raising new challenges (Galekwa et al., 2024):contentReference[oaicite:3]{index=3}.
+
+- **Why should we care?** Accurate prediction can influence decision-making in sports analytics, gambling markets, and fan engagement.  
+- **What has been done?** Statistical rating systems and basic machine learning classifiers have shown moderate to high accuracy.  
+- **What is new?** Applying modern pipelines, integrating engineered features from play-by-play data, and balancing accuracy with interpretability.  
+
+## Specific Aims
+This project asks: **Can machine learning models improve the accuracy of sports game outcome prediction compared to traditional statistical approaches?**
+
+This question matters because prior research either uses simple models that ignore rich in-game data or applies black-box models without interpretability. Exploring a spectrum of models—from logistic regression to ensemble methods—may reveal a balance between predictive power and transparency. The challenge lies in the inherent randomness of sports, where injuries, turnovers, and coaching decisions introduce noise.
+
+## Data Description
+The dataset consists of historical game records from publicly available NFL data sources (e.g., nflfastR, Pro Football Focus as in Juuri, 2023:contentReference[oaicite:4]{index=4}). It includes:
+
+- **Sample size:** Thousands of games across multiple seasons.  
+- **Variables of interest:** Team stats, player performance metrics, game location, win/loss outcome.  
+- **Nature of variables:** Mix of categorical (team, home/away) and numerical (yardage, turnovers, efficiency).  
+
+Data will be partitioned into training, validation, and test sets.
+
+## Research Design / Methods / Schedule
+The project will proceed in four stages:
+
+1. **Data collection & cleaning** – import raw data, resolve missing values, engineer features.  
+2. **Exploratory analysis** – examine distributions, correlations, and class balance.  
+3. **Model training** – fit baseline logistic regression, then random forest, gradient boosting, and neural networks (Juuri, 2023:contentReference[oaicite:5]{index=5}).  
+4. **Evaluation & interpretation** – compare models on accuracy, log-loss, and calibration; analyze feature importance.  
+
+These methods are appropriate because classification algorithms are well-suited for binary outcomes, and hybrid systems have been shown to yield strong accuracy in NFL prediction tasks (Uzoma & Nwachukwu, 2015:contentReference[oaicite:6]{index=6}). Feature engineering may be the most challenging step; if advanced features underperform, the fallback will be simpler box-score features.
+
+## Discussion
+I expect ensemble machine learning models to outperform simple baselines while highlighting key predictive factors (e.g., turnovers, offensive efficiency). This would align with Juuri (2023):contentReference[oaicite:7]{index=7} and extend the results with a more systematic pipeline. Potential problems include overfitting, which will be mitigated with cross-validation, and missing data, which can be addressed via imputation.  
+
+If machine learning performs no better than traditional models (as some reviews suggest about inherent unpredictability; Galekwa et al., 2024:contentReference[oaicite:8]{index=8}), that outcome still contributes valuable knowledge about the limits of prediction in sports.
+
+## Conclusion
+This project will evaluate the potential of modern machine learning methods to improve sports outcome prediction while maintaining interpretability. The results will contribute both practical tools and conceptual insights to sports analytics.
+
+## References
+- Glickman, M. E., & Stern, H. S. (2016). *Estimating team strength in the NFL*.  
+- Juuri, S. (2023). *Predicting the Results of NFL Games Using Machine Learning*. Master’s Thesis, Aalto University.  
+- Uzoma, A. O., & Nwachukwu, E. O. (2015). *A Hybrid Prediction System for American NFL Results*. *International Journal of Computer Applications Technology and Research, 4*(1), 42–47.  
+- Galekwa, R. M., Tshimula, J. M., Tajeuna, E. G., & Kyandoghere, K. (2024). *A Systematic Review of Machine Learning in Sports Betting: Techniques, Challenges, and Future Directions*. arXiv preprint.  
+
+
