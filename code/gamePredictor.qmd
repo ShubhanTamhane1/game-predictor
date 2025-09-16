@@ -3,3 +3,118 @@ title: "Untitled"
 format: html
 ---
 
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+```
+
+```{python}
+data = pd.read_feather("/Users/shubhantamhane/game-predictor/data/nflfastR.feather")
+```
+
+```{python}
+data.head(5)
+```
+
+```{python}
+import pandas as pd
+
+def qb_epa_by_game(data: pd.DataFrame, team_col: str = "posteam") -> pd.DataFrame:
+
+    important = {"game_id", "qb_epa", "play_id", team_col}
+    missing = important - set(data.columns)
+    if missing:
+        raise KeyError(f"missing required columns: {sorted(missing)}")
+
+    data = data.copy()
+
+    if "qb_dropback" in data.columns:
+        dropback_mask = (lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("qb_dropback")
+    else:
+        dropback_mask = data["qb_epa"].notna()
+
+    mask = dropback_mask & data[team_col].notna() & data["qb_epa"].notna()
+
+    if "qb_spike" in data.columns:
+        mask &= ~(lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("qb_spike")
+
+    if "qb_kneel" in data.columns:
+        mask &= ~(lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("qb_kneel")
+
+    if "two_point_attempt" in data.columns:
+        mask &= ~(lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("two_point_attempt")
+
+    if "season_type" in data.columns:
+        mask &= (data["season_type"] == "REG")
+
+    dff = data.loc[mask, ["game_id", team_col, "qb_epa", "play_id"]].copy()
+
+    output = (
+        dff.groupby(["game_id", team_col], as_index=False)
+           .agg(
+               qb_total_epa=("qb_epa", "sum"),
+               qb_dropbacks=("play_id", "nunique")  # count distinct QB-involved plays
+           )
+           .rename(columns={team_col: "posteam"})
+           .sort_values(["game_id", "posteam"], ignore_index=True)
+    )
+    return output
+
+
+qb_game = qb_epa_by_game(data)
+
+print(qb_game.head())
+```
+
+```{python}
+from typing import Callable
+
+def build_features(data: pd.DataFrame, week: int, function: Callable[[pd.DataFrame], pd.DataFrame], *, team_col: str = "posteam", total_col: str = "total", count_col: str = "count", rate_name: str = "prior_rate"):
+
+    if "game_id" not in data.columns or "week" not in data.columns:
+
+        raise KeyError("data frame must contain game_id and week columns")
+
+    game_level = function(data) # function to get per_game data
+
+    game_info = data[["game_id", "week"]].drop_duplicates()
+    game_level = game_level.merge(game_info, on="game_id", how="left")
+    game_level = game_level.loc[game_level['week'] < week].copy()
+
+    agg = (
+        game_level.groupby("posteam", as_index=False)
+                  .agg(
+                      **{f"prior_{total_col}": (total_col, "sum"),
+                         f"prior_{count_col}": (count_col, "sum")}
+                  )
+    )
+
+    agg["week"] = week
+    agg[rate_name] = np.where(
+        agg[f"prior_{count_col}"] > 0,
+        agg[f"prior_{total_col}"] / agg[f"prior_{count_col}"],
+        np.nan
+    )
+
+    return agg[["week", "posteam",
+                f"prior_{total_col}", f"prior_{count_col}", rate_name]]
+
+```
+
+```{python}
+# qb_epa_by_game should return: ['game_id','posteam','qb_total_epa','qb_dropbacks']
+wk10_qb = build_features(
+    data=data,
+    week=10,
+    function=qb_epa_by_game,
+    team_col="posteam",
+    total_col="qb_total_epa",
+    count_col="qb_dropbacks",
+    rate_name="prior_qb_epa_per_dropback"
+)
+
+print(wk10_qb)
+
+```
