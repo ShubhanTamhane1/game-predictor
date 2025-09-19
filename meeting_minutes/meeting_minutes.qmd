@@ -3,3 +3,29 @@ title: "Untitled"
 format: html
 ---
 
+Meeting 1)
+```{md}
+- 3 Question to answer:
+ - Why do we care?
+ - What has been done
+ - What's new
+- Set up repository:
+ - Meeting minutes
+ - Data
+ - Code
+ - Manuscript
+ - References
+```
+
+Meeting 2)
+```{md}
+- Set up functions to get aggregate play-by-play to per game
+- From there, set up function to take per game and find averages using week parameter
+```
+
+
+Meeting 4)
+```{md}
+- Use functions to develop dataset with week data
+- Clean data
+```
