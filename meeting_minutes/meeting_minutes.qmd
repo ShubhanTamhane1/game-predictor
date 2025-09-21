@@ -29,3 +29,15 @@ Meeting 4)
 - Use functions to develop dataset with week data
 - Clean data
 ```
+
+Pre meeting 5)
+```{md}
+- Features to add:
+ - offensive yardage per game
+ - offensive first downs per game
+ - yards allowed per game
+ - first downs allowed per game
+ - tds allowed per game
+ - turnover margin
+ - strength of schedule
+```
