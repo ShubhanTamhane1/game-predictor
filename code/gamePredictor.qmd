@@ -23,85 +23,78 @@ data.columns
 ```
 
 ```{python}
+import numpy as np
 import pandas as pd
 
-def qb_epa_by_game(data: pd.DataFrame, team_col: str = "posteam") -> pd.DataFrame:
-
-    important = {"game_id", "qb_epa", "play_id", team_col}
-    missing = important - set(data.columns)
+def qb_epa_by_play(data: pd.DataFrame, team_col: str = "posteam"):
+    required = {"game_id", "qb_epa", "play_id", team_col}
+    missing = required - set(data.columns)
     if missing:
         raise KeyError(f"missing required columns: {sorted(missing)}")
 
-    data = data.copy()
+    df = data.copy()
 
-    if "qb_dropback" in data.columns:
-        dropback_mask = (lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("qb_dropback")
+    # Build mask similar to your game version
+    if "qb_dropback" in df.columns:
+        dropback_mask = df["qb_dropback"].astype("float64").fillna(0.0).astype(bool)
     else:
-        dropback_mask = data["qb_epa"].notna()
+        dropback_mask = df["qb_epa"].notna()
 
-    mask = dropback_mask & data[team_col].notna() & data["qb_epa"].notna()
-
-    if "qb_spike" in data.columns:
-        mask &= ~(lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("qb_spike")
-
-    if "qb_kneel" in data.columns:
-        mask &= ~(lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("qb_kneel")
-
-    if "two_point_attempt" in data.columns:
-        mask &= ~(lambda col: data[col].astype("float64").fillna(0.0).astype(bool))("two_point_attempt")
-
-    if "season_type" in data.columns:
-        mask &= (data["season_type"] == "REG")
-
-    dff = data.loc[mask, ["game_id", team_col, "qb_epa", "play_id"]].copy()
-
-    output = (
-        dff.groupby(["game_id", team_col], as_index=False)
-           .agg(
-               qb_total_epa=("qb_epa", "sum"),
-               qb_dropbacks=("play_id", "nunique")  # count distinct QB-involved plays
-           )
-           .rename(columns={team_col: "posteam"})
-           .sort_values(["game_id", "posteam"], ignore_index=True)
+    mask = (
+        dropback_mask
+        & df[team_col].notna()
+        & df["qb_epa"].notna()
     )
-    return output
 
+    for col in ["qb_spike", "qb_kneel", "two_point_attempt"]:
+        if col in df.columns:
+            mask &= ~df[col].astype("float64").fillna(0.0).astype(bool)
 
-qb_game = qb_epa_by_game(data)
+    if "season_type" in df.columns:
+        mask &= (df["season_type"] == "REG")
 
-print(qb_game.head())
+    plays = df.loc[mask, ["game_id", team_col, "qb_epa"]].copy()
+    plays = plays.rename(columns={team_col: "posteam"})
+    # Per-play rows: total=qb_epa, count=1
+    plays["total"] = plays["qb_epa"]
+    plays["count"] = 1
+    return plays[["game_id", "posteam", "total", "count"]]
+
 ```
 
 ```{python}
-from typing import Optional
+from typing import Optional, Callable
 
-def feature_per_game(data: pd.DataFrame, value_col: str, team_col: str, where: Optional[Callable[[pd.DataFrame], pd.Series]] = None):
+def feature_per_game(data: pd.DataFrame, value_col: str, team_col: str, where: Optional[Callable[[pd.DataFrame], pd.Series]] = None
+):
 
     needed = {"game_id", team_col, "play_id", value_col}
     missing = needed - set(data.columns)
     if missing:
         raise KeyError(f"Missing required columns: {sorted(missing)}")
+
     df = data.copy()
+    base_mask = df[value_col].notna() & df[team_col].notna()
+    if where is not None:
+        cond = where(df)
+        if not isinstance(cond, pd.Series) or cond.shape[0] != df.shape[0]:
+            raise ValueError("where(...) must return a boolean Series aligned with data")
+        base_mask &= cond
 
-    mask = df[value_col].notna() & df[team_col].notna() ## make mask for rows where value is present and team exists
-
-    dff = df.loc[mask, ["game_id", team_col, value_col, "play_id"]]
+    dff = df.loc[base_mask, ["game_id", team_col, value_col, "play_id"]].copy()
 
     out = (
         dff.groupby(["game_id", team_col], as_index=False)
-           .agg(
-               total=(value_col, "sum"),
-               count=("play_id", "nunique")  # distinct plays
-           )
-           .rename(columns={team_col: "posteam"})  # standardize for build_features
+           .agg(total=(value_col, "sum"),
+                count=("play_id", "nunique"))
+           .rename(columns={team_col: "posteam"})
            .sort_values(["game_id", "posteam"], ignore_index=True)
     )
     return out
+
 ```
 
 ```{python}
-from typing import Callable
-
 def build_features(data: pd.DataFrame, week: int, function: Callable[[pd.DataFrame], pd.DataFrame], *, team_col: str = "posteam", total_col: str = "total", count_col: str = "count", rate_name: str = "prior_rate"):
 
     if "game_id" not in data.columns or "week" not in data.columns:
@@ -135,6 +128,36 @@ def build_features(data: pd.DataFrame, week: int, function: Callable[[pd.DataFra
 ```
 
 ```{python}
+def feature_sum_per_game(data: pd.DataFrame,value_col: str, team_col: str, where=None
+):
+    needed = {"game_id", team_col, value_col}
+    missing = needed - set(data.columns)
+    if missing:
+        raise KeyError(f"Missing required columns: {sorted(missing)}")
+
+    df = data.copy()
+    mask = df[value_col].notna() & df[team_col].notna()
+    if where is not None:
+        cond = where(df)
+        if not isinstance(cond, pd.Series) or cond.shape[0] != df.shape[0]:
+            raise ValueError("where(...) must return a boolean Series aligned with data")
+        mask &= cond
+
+    dff = df.loc[mask, ["game_id", team_col, value_col]].copy()
+
+    out = (
+        dff.groupby(["game_id", team_col], as_index=False)
+           .agg(total=(value_col, "sum"))
+           .rename(columns={team_col: "posteam"})
+           .sort_values(["game_id", "posteam"], ignore_index=True)
+    )
+
+    out["count"] = 1
+    return out[["game_id", "posteam", "total", "count"]]
+
+```
+
+```{python}
 # qb_epa_by_game should return: ['game_id','posteam','qb_total_epa','qb_dropbacks']
 wk10_qb = build_features(
     data=data,
@@ -149,21 +172,20 @@ wk10_qb = build_features(
 print(wk10_qb)
 ```
 
+
 ```{python}
 wk10_off = build_features(
     data=data,
     week=10,
-    function=lambda df: feature_per_game(
+    function=lambda df: feature_sum_per_game(
         df,
         value_col="yards_gained",
         team_col="posteam",
         where=lambda d: d["play_type"].isin(["run", "pass"])
     ),
-    team_col="posteam",
     total_col="total",
     count_col="count",
-    rate_name="prior_off_yards_per_play"
+    rate_name="prior_off_yards_per_game"
 )
-
 wk10_off
 ```
