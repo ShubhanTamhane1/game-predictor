@@ -158,7 +158,7 @@ def feature_sum_per_game(data: pd.DataFrame,value_col: str, team_col: str, where
 ```
 
 ```{python}
-# qb_epa_by_game should return: ['game_id','posteam','qb_total_epa','qb_dropbacks']
+#data frame for Qb EPA/dropback
 wk10_qb = build_features(
     data=data,
     week=10,
@@ -172,8 +172,33 @@ wk10_qb = build_features(
 print(wk10_qb)
 ```
 
+```{python}
+def qb_epa_rate_per_game(data: pd.DataFrame):
+    g = qb_epa_by_game(data)
+    g = g.assign(
+        total = np.where(g["qb_dropbacks"] > 0, g["qb_total_epa"] / g["qb_dropbacks"], np.nan),
+        count = 1
+    )
+    return g[["game_id", "posteam", "total", "count"]]
+```
 
 ```{python}
+# qb epa per dropback per game
+wk10_qb_gameavg = build_features(
+    data=data,
+    week=10,
+    function=qb_epa_rate_per_game,
+    total_col="total",
+    count_col="count",
+    rate_name="prior_qb_epa_per_db_avg_game"
+)
+
+wk10_qb_gameavg
+```
+
+
+```{python}
+# offensive yards per game
 wk10_off = build_features(
     data=data,
     week=10,
@@ -188,4 +213,133 @@ wk10_off = build_features(
     rate_name="prior_off_yards_per_game"
 )
 wk10_off
+```
+
+```{python}
+# yards allowed per game
+
+wk10_def = build_features(
+    data=data, 
+    week=10, 
+    function=lambda df: feature_sum_per_game(
+        df, 
+        value_col="yards_gained", 
+        team_col="defteam", 
+        where=lambda d: d["play_type"].isin(["run", "pass"])
+    ), 
+    total_col="total", 
+    count_col="count", 
+    rate_name="prior_def_yards_per_game"
+)
+
+wk10_def
+```
+
+```{python}
+# offensive first downs per game
+
+wk10_fdowns = build_features(
+    data=data, 
+    week=10, 
+    function=lambda df: feature_sum_per_game(
+        df, 
+        value_col="first_down", 
+        team_col="posteam"
+    ), 
+    total_col="total", 
+    count_col="count", 
+    rate_name="prior_first_downs_per_game"
+)
+
+wk10_fdowns
+```
+
+```{python}
+# first downs allowed per game
+
+wk10_fdowns_allowed = build_features(
+    data=data,
+    week=10, 
+    function=lambda df: feature_sum_per_game(
+        df, 
+        value_col="first_down", 
+        team_col="defteam"        
+    ), 
+    total_col="total", 
+    count_col="count", 
+    rate_name="prior_first_downs_allowed_per_game"
+)
+wk10_fdowns_allowed
+```
+
+```{python}
+# touchdowns allowed per game
+
+wk_10_td_allowed = build_features(
+    data=data, 
+    week=10, 
+    function =lambda df: feature_sum_per_game(
+        df, value_col="touchdown", 
+        team_col="defteam"
+    ), 
+    total_col="total", 
+    count_col="count", 
+    rate_name="prior_tds_allowed_per_game"
+)
+
+wk_10_td_allowed
+```
+
+```{python}
+# to see features clearly
+pd.Series(data.columns, name="column").to_csv("columns.txt", index=False)
+```
+
+```{python}
+def turnover_margin_per_game(data: pd.DataFrame):
+    required = {"game_id", "posteam", "defteam"}
+    missing = required-set(data.columns)
+
+    if missing:
+        raise KeyError("missing columns")
+    
+    df = data.copy()
+
+
+```
+
+```{python}
+target = 10
+
+def combine(data: pd.DataFrame, metric_col, new_col, week=target):
+    out = data.copy()
+    if "week" in out.columns:
+        out = out.loc[out['week'] == week]
+    out = out[['posteam', metric_col]].rename(columns={metric_col: new_col})
+
+    if out.duplicated('posteam').any():
+        raise ValueError("duplicate")
+    return out
+
+qb = combine(wk10_qb_gameavg,"prior_qb_epa_per_db_avg_game", "qb_epa_per_db_g")
+
+off = combine(wk10_off,"prior_off_yards_per_game", "off_yds_g")
+
+deff = combine(wk10_def,"prior_def_yards_per_game","yds_allowed_g")
+
+fd   = combine(wk10_fdowns,       "prior_first_downs_per_game", "first_downs_g")
+
+fda  = combine(wk10_fdowns_allowed,"prior_first_downs_allowed_per_game","first_downs_allowed_g")
+
+tda  = combine(wk_10_td_allowed, "prior_tds_allowed_per_game", "td_allowed_g")
+```
+
+```{python}
+from functools import reduce
+
+feature_df = reduce(lambda L, R: L.merge(R, on="posteam", how="outer"), [qb, off, deff, fd, fda, tda])
+
+feature_df.insert(1, "week", target)
+
+print(feature_df)
 ```
