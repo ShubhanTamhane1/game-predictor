@@ -23,9 +23,6 @@ data.columns
 ```
 
 ```{python}
-import numpy as np
-import pandas as pd
-
 def qb_epa_by_play(data: pd.DataFrame, team_col: str = "posteam"):
     required = {"game_id", "qb_epa", "play_id", team_col}
     missing = required - set(data.columns)
@@ -91,6 +88,22 @@ def feature_per_game(data: pd.DataFrame, value_col: str, team_col: str, where: O
            .sort_values(["game_id", "posteam"], ignore_index=True)
     )
     return out
+
+```
+
+```{python}
+def qb_epa_by_game(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Summarize QB EPA at the game level.
+    Returns total EPA and number of dropbacks per team per game.
+    """
+    plays = qb_epa_by_play(data)
+    game_level = (
+        plays.groupby(["game_id", "posteam"], as_index=False)
+             .agg(qb_total_epa=("total", "sum"),
+                  qb_dropbacks=("count", "sum"))
+    )
+    return game_level
 
 ```
 
@@ -296,15 +309,57 @@ pd.Series(data.columns, name="column").to_csv("columns.txt", index=False)
 ```
 
 ```{python}
-def turnover_margin_per_game(data: pd.DataFrame):
-    required = {"game_id", "posteam", "defteam"}
-    missing = required-set(data.columns)
-
+def turnover_margin_per_game(data: pd.DataFrame) -> pd.DataFrame:
+    required = {"game_id", "posteam", "defteam", "fumble_lost", "interception"}
+    missing = required - set(data.columns)
     if missing:
-        raise KeyError("missing columns")
-    
+        raise KeyError(f"Missing columns: {sorted(missing)}")
+
     df = data.copy()
 
+    
+    df["turnover_lost"] = (
+        df["fumble_lost"].fillna(0).astype(int)
+        + df["interception"].fillna(0).astype(int)
+    )
+
+    
+    lost = (
+        df.groupby(["game_id", "posteam"], as_index=False)
+          .agg(turnovers_lost=("turnover_lost", "sum"))
+          .rename(columns={"posteam": "team"})
+    )
+
+    
+    gained = (
+        df.groupby(["game_id", "defteam"], as_index=False)
+          .agg(turnovers_gained=("turnover_lost", "sum"))
+          .rename(columns={"defteam": "team"})
+    )
+
+    result = pd.merge(lost, gained, on=["game_id", "team"], how="outer").fillna(0)
+    result["turnover_margin"] = result["turnovers_gained"] - result["turnovers_lost"]
+
+    result = result.rename(columns={"team": "posteam"})
+
+    result["count"] = 1
+
+    result = result.sort_values(["game_id", "posteam"], ignore_index=True)
+
+    return result[["game_id", "posteam", "turnovers_lost", "turnovers_gained", "turnover_margin", "count"]]
+```
+
+```{python}
+
+wk10_turnover_margin = build_features(
+    data=data,
+    week=10,
+    function=turnover_margin_per_game,
+    team_col="posteam",
+    total_col="turnover_margin",
+    count_col="count",
+    rate_name="prior_turnover_margin_per_game"
+)
 
 ```
 
@@ -327,7 +382,7 @@ off = combine(wk10_off,"prior_off_yards_per_game", "off_yds_g")
 
 deff = combine(wk10_def,"prior_def_yards_per_game","yds_allowed_g")
 
-fd   = combine(wk10_fdowns,       "prior_first_downs_per_game", "first_downs_g")
+fd   = combine(wk10_fdowns,"prior_first_downs_per_game", "first_downs_g")
 
 fda  = combine(wk10_fdowns_allowed,"prior_first_downs_allowed_per_game","first_downs_allowed_g")
 
@@ -342,4 +397,51 @@ feature_df = reduce(lambda L, R: L.merge(R, on="posteam", how="outer"), [qb, off
 feature_df.insert(1, "week", target)
 
 print(feature_df)
+```
+
+```{python}
+def game_winner_target(data: pd.DataFrame) -> pd.DataFrame:
+
+    required = {"game_id", "home_team", "away_team", "total_home_score", "total_away_score"}
+    missing = required - set(data.columns)
+    if missing:
+        raise KeyError(f"Missing required columns: {sorted(missing)}")
+
+    df = data.copy()
+
+    game_scores = (
+        df[["game_id", "home_team", "away_team", "total_home_score", "total_away_score"]]
+        .drop_duplicates(subset=["game_id"])
+        .reset_index(drop=True)
+    )
+
+    game_scores["winner"] = np.where(
+        game_scores["total_home_score"] > game_scores["total_away_score"],
+        game_scores["home_team"],
+        np.where(
+            game_scores["total_home_score"] < game_scores["total_away_score"],
+            game_scores["away_team"],
+            np.nan
+        )
+    )
+
+    game_scores["loser"] = np.where(
+        game_scores["winner"] == game_scores["home_team"],
+        game_scores["away_team"],
+        game_scores["home_team"]
+    )
+
+    winners = game_scores[["game_id", "winner"]].rename(columns={"winner": "posteam"})
+    winners["target"] = 1
+
+    losers = game_scores[["game_id", "loser"]].rename(columns={"loser": "posteam"})
+    losers["target"] = 0
+
+    target_df = pd.concat([winners, losers], ignore_index=True).sort_values(["game_id", "posteam"])
+
+    return target_df[["game_id", "posteam", "target"]]
+```
+
+```{python}
+
 ```
