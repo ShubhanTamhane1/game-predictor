@@ -33,6 +33,7 @@ Meeting 4)
 Pre meeting 5)
 ```{md}
 - Features to add:
+ - qb epa per dropback per game 
  - offensive yardage per game
  - offensive first downs per game
  - yards allowed per game
@@ -41,4 +42,14 @@ Pre meeting 5)
  - turnover margin
  - strength of schedule
  - home/away
+```
+
+Meeting 5)
+```{md}
+- finishing up feature engineering to start analysis
+- things to be interested by:
+ - relationship between qp epa/dropback and wins/losses
+ - relationship between offensive yardage/game and wins/losses
+ - standard correlation matrix
+ - home/away and win/loss, chi squared test of independence 
 ```
